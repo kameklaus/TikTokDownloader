@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TikTok Downloader</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+        }
+        .gradient-bg {
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 50%, #000000 100%);
+        }
+        .glass-card {
+            background: rgba(31, 41, 55, 0.3);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(75, 85, 99, 0.5);
+        }
+        .spinner {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const API_URL = 'http://localhost:5000/api';
+
+        // Icons
+        const PlayIcon = () => (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+        );
+
+        const RefreshIcon = () => (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+        );
+
+        const DatabaseIcon = () => (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+            </svg>
+        );
+
+        const CheckCircleIcon = () => (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+        );
+
+        const AlertCircleIcon = () => (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+        );
+
+        const LoaderIcon = () => (
+            <svg className="w-4 h-4 spinner" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+        );
+
+        const TrashIcon = () => (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+        );
+
+        const DownloadIcon = () => (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+        );
+
+        const App = () => {
+            const [accounts, setAccounts] = useState([]);
+            const [url, setUrl] = useState('');
+            const [status, setStatus] = useState({ message: 'Ready', type: 'idle' });
+            const [progress, setProgress] = useState({ current: 0, total: 0 });
+            const [isRunning, setIsRunning] = useState(false);
+
+            useEffect(() => {
+                loadAccounts();
+                const interval = setInterval(updateStatus, 2000);
+                return () => clearInterval(interval);
+            }, []);
+
+            const loadAccounts = async () => {
+                try {
+                    const response = await fetch(`${API_URL}/accounts`);
+                    const data = await response.json();
+                    setAccounts(data);
+                } catch (error) {
+                    console.error('Error loading accounts:', error);
+                }
+            };
+
+            const updateStatus = async () => {
+                try {
+                    const response = await fetch(`${API_URL}/status`);
+                    const data = await response.json();
+                    setStatus({ message: data.message, type: data.type });
+                    setProgress(data.progress || { current: 0, total: 0 });
+                    setIsRunning(data.is_running);
+                    
+                    // Reload accounts if status is success
+                    if (data.type === 'success' && !data.is_running) {
+                        loadAccounts();
+                    }
+                } catch (error) {
+                    console.error('Error updating status:', error);
+                }
+            };
+
+            const startDownload = async () => {
+                if (!url.trim()) {
+                    setStatus({ message: 'Please enter a URL', type: 'error' });
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`${API_URL}/download/start`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url: url })
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        setStatus({ message: `Download for @${data.username} started`, type: 'running' });
+                        setUrl('');
+                        setTimeout(loadAccounts, 1000);
+                    } else {
+                        setStatus({ message: data.error || 'Download error', type: 'error' });
+                    }
+                } catch (error) {
+                    setStatus({ message: 'Server connection error', type: 'error' });
+                }
+            };
+
+            const checkUpdates = async () => {
+                try {
+                    const response = await fetch(`${API_URL}/check-updates`, { method: 'POST' });
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        setStatus({ message: 'Update check started', type: 'running' });
+                    } else {
+                        setStatus({ message: data.error, type: 'error' });
+                    }
+                } catch (error) {
+                    setStatus({ message: 'Check error', type: 'error' });
+                }
+            };
+
+            const deleteAccount = async (accountId) => {
+                try {
+                    await fetch(`${API_URL}/accounts/${accountId}`, { method: 'DELETE' });
+                    setStatus({ message: 'Account deleted', type: 'info' });
+                    loadAccounts();
+                } catch (error) {
+                    setStatus({ message: 'Delete error', type: 'error' });
+                }
+            };
+
+            const handleKeyPress = (e) => {
+                if (e.key === 'Enter' && !isRunning) {
+                    startDownload();
+                }
+            };
+
+            const getStatusIcon = () => {
+                switch (status.type) {
+                    case 'running': return <LoaderIcon />;
+                    case 'success': return <CheckCircleIcon />;
+                    case 'error': return <AlertCircleIcon />;
+                    default: return <DatabaseIcon />;
+                }
+            };
+
+            const getStatusColor = () => {
+                switch (status.type) {
+                    case 'running': return 'text-blue-400';
+                    case 'success': return 'text-green-400';
+                    case 'error': return 'text-red-400';
+                    default: return 'text-gray-400';
+                }
+            };
+
+            return (
+                <div className="min-h-screen gradient-bg text-gray-100 p-8">
+                    <div className="max-w-5xl mx-auto">
+                        {/* Header */}
+                        <div className="mb-8">
+                            <h1 className="text-4xl font-thin mb-2 tracking-wide">TikTok Downloader</h1>
+                            <p className="text-gray-500 text-sm">Automatic TikTok video downloader</p>
+                        </div>
+
+                        {/* Status Bar */}
+                        <div className={`glass-card rounded-2xl p-4 mb-6 ${getStatusColor()}`}>
+                            <div className="flex items-center gap-3">
+                                {getStatusIcon()}
+                                <span className="text-sm font-light">{status.message}</span>
+                                {progress.total > 0 && (
+                                    <span className="ml-auto text-xs text-gray-400">
+                                        {progress.current}/{progress.total}
+                                    </span>
+                                )}
+                            </div>
+                            {progress.total > 0 && (
+                                <div className="mt-3 bg-gray-700/50 rounded-full h-1.5 overflow-hidden">
+                                    <div 
+                                        className="bg-blue-500 h-full transition-all duration-300"
+                                        style={{ width: `${(progress.current / progress.total) * 100}%` }}
+                                    />
+                                </div>
+                            )}
+                        </div>
+
+                        {/* URL Input & Actions */}
+                        <div className="glass-card rounded-2xl p-6 mb-6">
+                            <h2 className="text-lg font-light mb-4 flex items-center gap-2">
+                                <DownloadIcon />
+                                Download Video
+                            </h2>
+                            
+                            <div className="space-y-3">
+                                <input
+                                    type="text"
+                                    placeholder="Account URL (https://www.tiktok.com/@username) or video URL"
+                                    value={url}
+                                    onChange={(e) => setUrl(e.target.value)}
+                                    onKeyPress={handleKeyPress}
+                                    disabled={isRunning}
+                                    className="w-full bg-gray-700/50 border border-gray-600/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                />
+                                
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button
+                                        onClick={startDownload}
+                                        disabled={isRunning || !url.trim()}
+                                        className="bg-green-600 hover:bg-green-500 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed rounded-xl px-4 py-3 text-sm font-medium transition-all flex items-center justify-center gap-2"
+                                    >
+                                        <PlayIcon />
+                                        Start Download
+                                    </button>
+                                    
+                                    <button
+                                        onClick={checkUpdates}
+                                        disabled={isRunning || accounts.length === 0}
+                                        className="bg-purple-600 hover:bg-purple-500 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed rounded-xl px-4 py-3 text-sm font-medium transition-all flex items-center justify-center gap-2"
+                                    >
+                                        <RefreshIcon />
+                                        Check Updates
+                                    </button>
+                                </div>
+
+                                <p className="text-xs text-gray-500 mt-2">
+                                    💡 Enter a URL and click "Start Download" - the account will be added automatically
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Accounts List */}
+                        <div className="glass-card rounded-2xl p-6">
+                            <h2 className="text-lg font-light mb-4 flex items-center gap-2">
+                                <DatabaseIcon />
+                                Tracked Accounts ({accounts.length})
+                            </h2>
+                            
+                            {accounts.length === 0 ? (
+                                <div className="text-center py-12">
+                                    <div className="text-gray-500 mb-4">
+                                        <DownloadIcon />
+                                    </div>
+                                    <p className="text-gray-500 text-sm mb-2">
+                                        No accounts added
+                                    </p>
+                                    <p className="text-gray-600 text-xs">
+                                        Paste a TikTok account or video URL above and click "Start Download"
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    {accounts.map((account) => (
+                                        <div
+                                            key={account.id}
+                                            className="bg-gray-700/30 rounded-xl p-4 border border-gray-600/30 hover:border-gray-500/50 transition-all"
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className="font-medium">@{account.username}</span>
+                                                        <span className="text-xs text-gray-500">
+                                                            · {account.videos_downloaded} videos
+                                                        </span>
+                                                        {account.start_video_id && (
+                                                            <span className="text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-400">
+                                                                from video {account.start_video_id}
+                                                            </span>
+                                                        )}
+                                                        <span className={`text-xs px-2 py-0.5 rounded ${
+                                                            account.status === 'completed' ? 'bg-green-500/20 text-green-400' :
+                                                            account.status === 'error' ? 'bg-red-500/20 text-red-400' :
+                                                            'bg-gray-500/20 text-gray-400'
+                                                        }`}>
+                                                            {account.status}
+                                                        </span>
+                                                    </div>
+                                                    {account.last_check && (
+                                                        <p className="text-xs text-gray-500">
+                                                            Last check: {new Date(account.last_check).toLocaleString()}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                
+                                                <button
+                                                    onClick={() => deleteAccount(account.id)}
+                                                    disabled={isRunning}
+                                                    className="text-red-400 hover:text-red-300 text-sm px-3 py-1.5 rounded-lg hover:bg-red-500/10 transition-all flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                >
+                                                    <TrashIcon />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Footer Info */}
+                        <div className="mt-6 text-center text-xs text-gray-600">
+                            <p>Videos are saved to D:\materials\[username]\input\</p>
+                            <p className="mt-1">.info.json files are deleted automatically</p>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
