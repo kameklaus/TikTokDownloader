@@ -1,6 +1,7 @@
-==============================================================================
-                       TIKTOK DOWNLOADER - MANUAL
-==============================================================================
+<img width="1120" height="806" alt="TikTokDownloader" src="https://github.com/user-attachments/assets/447d18d0-9344-4515-afd2-60bf5346d1d5" />
+
+TIKTOK DOWNLOADER - MANUAL
+-----------
 
 DESCRIPTION
 -----------
